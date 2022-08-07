@@ -1,11 +1,12 @@
 #include <array>
 #include <cassert>
+#include <fstream>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <random>
 #include <string>
 
-#include <optional>
 #include "emulator.h"
 
 namespace {
@@ -41,11 +42,41 @@ INSTR get_nibble(const INSTR dword, int nibble_seq) {
 
 Emulator::Emulator() {
   display_ = std::make_unique<Display>(64, 32);
+  init();
 }
 
-void Emulator::run_program(const std::string& file_name) {}
+void Emulator::load_program(const std::string& file_name) {
+  std::ifstream file(file_name);
+  std::string str;
+
+  INSTR program_start_address = program_start_address_;
+  while (std::getline(file, str)) {
+    const INSTR opcode = std::stoi(str);
+    const INSTR opcode_1 = opcode & 0x0F;
+    const INSTR opcode_2 = opcode & 0xF0;
+
+    ram_[program_start_address++] = opcode_1;
+    ram_[program_start_address++] = opcode_2;
+  }
+}
+
+void Emulator::loop() {
+  while (true) {
+    INSTR current_instruction = fetch();
+
+    if (current_instruction) {
+      // Point to next instruction
+      PC_ += 2;
+
+      decode_and_execute(current_instruction);
+    }
+  }
+}
 
 void Emulator::init() {
+  // Zerofi the ram
+  std::fill(std::begin(ram_), std::end(ram_), 0x0);
+
   // Load font data in ram
   for (auto const& [_, val] : font_bytes_map) {
     unsigned int i = 0;
@@ -58,9 +89,6 @@ void Emulator::init() {
 INSTR Emulator::fetch() {
   // Combine two ram bytes to form a single 16 bit instruction
   const INSTR current_instruction = ((ram_[PC_] << 8) | (ram_[PC_ + 1]));
-
-  // Point to next instruction
-  PC_ += 2;
 
   return current_instruction;
 }
@@ -137,12 +165,17 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
       // Random number between 0 and NN inclusive
       handleRandom(X, NN);
       break;
-    case 0xD:
-      // TODO: display
+    case 0xD: {
+      bool did_pixel_turn_off = false;
       for (int i = 0; i < N; ++i) {
-        display_->draw(VX, VY, ram_[I_ + i]);
+        did_pixel_turn_off =
+            did_pixel_turn_off || display_->draw(VX, VY, ram_[I_ + i]);
       }
-      break;
+
+      if (did_pixel_turn_off) {
+        VF_ = 0x01;
+      }
+    } break;
     case 0xE: {
       // Skip if key input
       bool is_key_pressed = display_->get_key_state(VX);

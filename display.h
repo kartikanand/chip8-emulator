@@ -3,6 +3,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_timer.h>
@@ -18,15 +19,19 @@ class Display {
 
   // Output operations
   void clear();
-  void draw(const int x, const int y, unsigned short int sprite);
+  bool draw(const int x, const int y, unsigned short int sprite);
 
   // Input operations
   bool get_key_state(const int key);
   std::optional<int> get_key();
 
  private:
+  void blit();
+
   const int width_;
   const int height_;
+
+  std::vector<int> pixels_;
 };
 
 #endif

@@ -17,8 +17,11 @@ class Emulator {
   Emulator(const Emulator&) = delete;
   Emulator& operator=(const Emulator&) = delete;
 
-  // Takes a program and runs
-  void run_program(const std::string& file_name);
+  // Takes a program and loads it in memory
+  void load_program(const std::string& file_name);
+
+  // Loop!
+  void loop();
 
  private:
   // Init function
@@ -57,6 +60,8 @@ class Emulator {
   int sound_timer_;
   int var_registers_[16];
   char VF_;
+
+  const INSTR program_start_address_ = 0x200;
 };
 
 #endif

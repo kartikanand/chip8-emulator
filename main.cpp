@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
   const std::string file_name = std::string(argv[1]);
   const std::unique_ptr<Emulator> emulator = std::make_unique<Emulator>();
 
-  emulator->run_program(file_name);
+  emulator->load_program(file_name);
 
   return 0;
 }
