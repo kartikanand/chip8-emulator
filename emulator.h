@@ -3,6 +3,7 @@
 
 #include <stack>
 #include <string>
+
 #include "display.h"
 
 using INSTR = unsigned short int;
@@ -16,9 +17,13 @@ class Emulator {
   Emulator(const Emulator&) = delete;
   Emulator& operator=(const Emulator&) = delete;
 
-  void loop();
+  // Takes a program and runs
+  void run_program(const std::string& file_name);
 
  private:
+  // Init function
+  void init();
+
   // Control Unit
   INSTR fetch();
   void decode_and_execute(const INSTR current_instruction);
@@ -35,6 +40,12 @@ class Emulator {
   void handleAdd(const INSTR X, const INSTR NN);
   void handleSubtract(const INSTR X, const INSTR Y, const INSTR N);
   void handleShift(const INSTR X, const INSTR NN);
+
+  // Speciality functions
+  void handleRandom(const INSTR X, const INSTR NN);
+  void handleBCD(const INSTR NN);
+  void handleMemoryLoad(const INSTR X);
+  void handleMemoryStore(const INSTR X);
 
   std::unique_ptr<Display> display_;
 

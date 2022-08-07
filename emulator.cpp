@@ -1,10 +1,32 @@
+#include <array>
 #include <cassert>
 #include <iostream>
+#include <map>
+#include <random>
 #include <string>
 
+#include <optional>
 #include "emulator.h"
 
 namespace {
+const std::map<INSTR, const std::array<INSTR, 5>> font_bytes_map{
+    {0x0, {0xF0, 0x90, 0x90, 0x90, 0xF0}},
+    {0x1, {0x20, 0x60, 0x20, 0x20, 0x70}},
+    {0x2, {0xF0, 0x10, 0xF0, 0x80, 0xF0}},
+    {0x3, {0xF0, 0x10, 0xF0, 0x10, 0xF0}},
+    {0x4, {0x90, 0x90, 0xF0, 0x10, 0x10}},
+    {0x5, {0xF0, 0x80, 0xF0, 0x10, 0xF0}},
+    {0x6, {0xF0, 0x80, 0xF0, 0x90, 0xF0}},
+    {0x7, {0xF0, 0x10, 0x20, 0x40, 0x40}},
+    {0x8, {0xF0, 0x90, 0xF0, 0x90, 0xF0}},
+    {0x9, {0xF0, 0x90, 0xF0, 0x10, 0xF0}},
+    {0xA, {0xF0, 0x90, 0xF0, 0x90, 0x90}},
+    {0xB, {0xE0, 0x90, 0xE0, 0x90, 0xE0}},
+    {0xC, {0xF0, 0x80, 0x80, 0x80, 0xF0}},
+    {0xD, {0xE0, 0x90, 0x90, 0x90, 0xE0}},
+    {0xE, {0xF0, 0x80, 0xF0, 0x80, 0xF0}},
+    {0xF, {0xF0, 0x80, 0xF0, 0x80, 0x80}}};
+
 // nibble seq should go from 1 to 4
 INSTR get_nibble(const INSTR dword, int nibble_seq) {
   assert(nibble_seq >= 1);
@@ -19,6 +41,18 @@ INSTR get_nibble(const INSTR dword, int nibble_seq) {
 
 Emulator::Emulator() {
   display_ = std::make_unique<Display>(64, 32);
+}
+
+void Emulator::run_program(const std::string& file_name) {}
+
+void Emulator::init() {
+  // Load font data in ram
+  for (auto const& [_, val] : font_bytes_map) {
+    unsigned int i = 0;
+    for (auto const& font_byte : val) {
+      ram_[i++] = font_byte;
+    }
+  }
 }
 
 INSTR Emulator::fetch() {
@@ -66,17 +100,17 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
       break;
     case 3:
       if (VX == NN) {
-        PC_ += 1;
+        PC_ += 2;
       }
       break;
     case 4:
       if (VX != NN) {
-        PC_ += 1;
+        PC_ += 2;
       }
       break;
     case 5:
       if (VX == VY) {
-        PC_ += 1;
+        PC_ += 2;
       }
       break;
     case 6:
@@ -90,7 +124,7 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
       break;
     case 9:
       if (VX != VY) {
-        PC_ += 1;
+        PC_ += 2;
       }
       break;
     case 0xA:
@@ -100,17 +134,22 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
       PC_ = (var_registers_[0] + NNN) % 255;
       break;
     case 0xC:
-      // TODO: random number generator
-      var_registers_[X] = NN;
+      // Random number between 0 and NN inclusive
+      handleRandom(X, NN);
+      break;
     case 0xD:
       // TODO: display
       for (int i = 0; i < N; ++i) {
         display_->draw(VX, VY, ram_[I_ + i]);
       }
       break;
-    case 0xE:
-      // TODO: skip if key input
-      break;
+    case 0xE: {
+      // Skip if key input
+      bool is_key_pressed = display_->get_key_state(VX);
+      if ((NN == 0x9E && is_key_pressed) || (NN == 0xA1 && !is_key_pressed)) {
+        PC_ += 1;
+      }
+    } break;
     case 0xF:
       switch (NN) {
         case 0x07:
@@ -129,18 +168,28 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
             var_registers_[0xF] = 1;
           }
         } break;
-        case 0x0A:
+        case 0x0A: {
           // TODO: handle get input
-          break;
+          std::optional<int> key = display_->get_key();
+          if (!key.has_value()) {
+            PC_ -= 2;
+          }
+        } break;
         case 0x29:
-          // TODO: handle font character
+          // Handle font character.
+          // Set I register to the address of character in VX.
+          // We can just multiply by 5 since we are storing fonts at the start
+          // of RAM and each font character is 5 bytes long.
+          I_ = (VX)*5;
           break;
         case 0x33:
-          // TODO: handle binary coded decimal conversion
+          handleBCD(VX);
           break;
         case 0x55:
+          handleMemoryStore(X);
+          break;
         case 0x65:
-          // TODO: handle memory load and store
+          handleMemoryLoad(X);
           break;
         default:
           break;
@@ -148,6 +197,40 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
     default:
       break;
   };
+}
+
+// Function returns a random number between 0 and NN inclusive
+void Emulator::handleRandom(const INSTR X, const INSTR NN) {
+  std::random_device seeder;
+  std::mt19937 rng(seeder());
+  std::uniform_int_distribution<int> gen(
+      0, NN);  // FIXME: Possible bug, check if this in inclusive
+
+  const int random_num = gen(rng);
+  var_registers_[X] = random_num;
+}
+
+void Emulator::handleBCD(const INSTR VX) {
+  INSTR temp = VX;
+  int offset = 0;
+  while (temp) {
+    INSTR digit = temp % 10;
+    temp = temp / 10;
+
+    ram_[I_ + (offset++)] = digit;
+  }
+}
+
+void Emulator::handleMemoryLoad(const INSTR X) {
+  for (INSTR i = 0; i <= X; ++i) {
+    var_registers_[i] = ram_[I_ + i];
+  }
+}
+
+void Emulator::handleMemoryStore(const INSTR X) {
+  for (INSTR i = 0; i <= X; ++i) {
+    ram_[I_ + i] = var_registers_[i];
+  }
 }
 
 void Emulator::handleArithmetic(const INSTR X,

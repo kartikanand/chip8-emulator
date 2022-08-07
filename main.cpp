@@ -2,6 +2,15 @@
 #include "emulator.h"
 
 int main(int argc, char** argv) {
-  std::cout << "Hello emulator" << std::endl;
+  if (argc < 2) {
+    std::cout << "Please specify a program file" << std::endl;
+    return 1;
+  }
+
+  const std::string file_name = std::string(argv[1]);
+  const std::unique_ptr<Emulator> emulator = std::make_unique<Emulator>();
+
+  emulator->run_program(file_name);
+
   return 0;
 }
