@@ -52,16 +52,16 @@ class Emulator {
 
   std::unique_ptr<Display> display_;
 
-  char ram_[4096];
-  std::stack<INSTR> stack_;
+  INSTR ram_[4096];
+  std::stack<unsigned short int> stack_;
   unsigned short int PC_;
   unsigned short int I_;
   int delay_timer_;
   int sound_timer_;
   int var_registers_[16];
-  char VF_;
+  unsigned char VF_;
 
-  const INSTR program_start_address_ = 0x200;
+  const unsigned short int program_start_address_ = 0x200;
 };
 
 #endif

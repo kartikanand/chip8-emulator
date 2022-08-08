@@ -12,5 +12,7 @@ int main(int argc, char** argv) {
 
   emulator->load_program(file_name);
 
+  emulator->loop();
+
   return 0;
 }

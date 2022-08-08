@@ -46,21 +46,22 @@ Emulator::Emulator() {
 }
 
 void Emulator::load_program(const std::string& file_name) {
-  std::ifstream file(file_name);
-  std::string str;
+  unsigned short program_start_address = program_start_address_;
 
-  INSTR program_start_address = program_start_address_;
-  while (std::getline(file, str)) {
-    const INSTR opcode = std::stoi(str);
-    const INSTR opcode_1 = opcode & 0x0F;
-    const INSTR opcode_2 = opcode & 0xF0;
+  std::ifstream file(file_name, std::ios::binary);
+  unsigned char buffer;
+  file.read(reinterpret_cast<char*>(&buffer), 1);
 
-    ram_[program_start_address++] = opcode_1;
-    ram_[program_start_address++] = opcode_2;
+  while (file) {
+    const INSTR opcode = (INSTR)buffer;
+    ram_[program_start_address++] = opcode;
+    file.read(reinterpret_cast<char*>(&buffer), 1);
   }
 }
 
 void Emulator::loop() {
+  PC_ = program_start_address_;
+
   while (true) {
     INSTR current_instruction = fetch();
 
@@ -69,6 +70,8 @@ void Emulator::loop() {
       PC_ += 2;
 
       decode_and_execute(current_instruction);
+    } else {
+      break;
     }
   }
 }
@@ -78,8 +81,8 @@ void Emulator::init() {
   std::fill(std::begin(ram_), std::end(ram_), 0x0);
 
   // Load font data in ram
+  unsigned int i = 0;
   for (auto const& [_, val] : font_bytes_map) {
-    unsigned int i = 0;
     for (auto const& font_byte : val) {
       ram_[i++] = font_byte;
     }
@@ -102,14 +105,15 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
   const int VX = var_registers_[X];
   const int VY = var_registers_[Y];
 
-  const INSTR NN = (Y << 8) ^ N;
-  const INSTR NNN = (X << 16) ^ NN;
+  const INSTR NN = (Y << 4) ^ N;
+  const INSTR NNN = (X << 8) ^ NN;
 
   switch (K) {
     case 0: {
       switch (NNN) {
         case 0x0E0:
           display_->clear();
+          display_->blit();
           break;
         case 0x0EE:
           PC_ = stack_.top();
@@ -166,11 +170,16 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
       handleRandom(X, NN);
       break;
     case 0xD: {
+      // Reset VF_
+      VF_ = 0x00;
+
       bool did_pixel_turn_off = false;
       for (int i = 0; i < N; ++i) {
         did_pixel_turn_off =
-            did_pixel_turn_off || display_->draw(VX, VY, ram_[I_ + i]);
+            display_->draw(VX, VY + i, ram_[I_ + i]) || did_pixel_turn_off;
       }
+
+      display_->blit();
 
       if (did_pixel_turn_off) {
         VF_ = 0x01;

@@ -1,3 +1,4 @@
+#include <fstream>
 #include <iostream>
 
 #include "display.h"
@@ -8,19 +9,34 @@ Display::Display(const int width, const int height)
     std::cout << "Error initializing SDL: " << SDL_GetError() << std::endl;
   }
 
-  pixels_.reserve(width * height);
+  for (int i = 0; i < width * height; ++i) {
+    pixels_.push_back(0);
+  }
 }
 
 void Display::blit() {
+  static int blit_count = 0;
+
+  std::string filename("bliting" + std::to_string(blit_count) + ".txt");
+  std::ofstream myfile;
+  myfile.open(filename);
+
   int count = 0;
   for (const auto& pixel : pixels_) {
-    std::cout << (pixel == 0 ? " " : "*");
+    if (pixel == 0) {
+      myfile << " ";
+    } else {
+      myfile << "*";
+    }
     count++;
 
-    if (count % width_) {
-      std::cout << std::endl;
+    if (count % width_ == 0) {
+      myfile << "\n";
     }
   }
+
+  myfile.close();
+  blit_count++;
 }
 
 void Display::clear() {

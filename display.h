@@ -25,9 +25,9 @@ class Display {
   bool get_key_state(const int key);
   std::optional<int> get_key();
 
- private:
   void blit();
 
+ private:
   const int width_;
   const int height_;
 
