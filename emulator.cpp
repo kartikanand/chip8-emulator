@@ -7,6 +7,8 @@
 #include <random>
 #include <string>
 
+#include <SFML/Graphics.hpp>
+
 #include "emulator.h"
 
 namespace {
@@ -41,8 +43,14 @@ INSTR get_nibble(const INSTR dword, int nibble_seq) {
 };  // namespace
 
 Emulator::Emulator() {
-  display_ = std::make_unique<Display>(64, 32);
-  init();
+  window_ = std::make_unique<sf::RenderWindow>(
+      sf::VideoMode(width_ * scale_, height_ * scale_), "Chip8 Emulator");
+
+  for (int i = 0; i < (width_ * height_); ++i) {
+    pixels_.push_back(0);
+  }
+
+  reset();
 }
 
 void Emulator::load_program(const std::string& file_name) {
@@ -62,7 +70,13 @@ void Emulator::load_program(const std::string& file_name) {
 void Emulator::loop() {
   PC_ = program_start_address_;
 
-  while (true) {
+  while (window_->isOpen()) {
+    sf::Event event;
+    while (window_->pollEvent(event)) {
+      if (event.type == sf::Event::Closed)
+        window_->close();
+    }
+
     INSTR current_instruction = fetch();
 
     if (current_instruction) {
@@ -70,15 +84,26 @@ void Emulator::loop() {
       PC_ += 2;
 
       decode_and_execute(current_instruction);
-    } else {
-      break;
     }
+
+    window_->clear(sf::Color::White);
+
+    draw_pixels();
+
+    window_->display();
   }
 }
 
-void Emulator::init() {
+void Emulator::reset() {
+  // Clear screen
+  clear();
+
   // Zerofi the ram
   std::fill(std::begin(ram_), std::end(ram_), 0x0);
+
+  for (INSTR i = 0; i <= 0xF; ++i) {
+    var_registers_[i] = 0;
+  }
 
   // Load font data in ram
   unsigned int i = 0;
@@ -112,8 +137,7 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
     case 0: {
       switch (NNN) {
         case 0x0E0:
-          display_->clear();
-          display_->blit();
+          clear();
           break;
         case 0x0EE:
           PC_ = stack_.top();
@@ -149,7 +173,7 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
       var_registers_[X] = NN;
       break;
     case 7:
-      handleAdd(X, var_registers_[Y]);
+      handleAdd(X, NN);
       break;
     case 8:
       handleArithmetic(X, Y, N, NN, NNN);
@@ -176,10 +200,9 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
       bool did_pixel_turn_off = false;
       for (int i = 0; i < N; ++i) {
         did_pixel_turn_off =
-            display_->draw(VX, VY + i, ram_[I_ + i]) || did_pixel_turn_off;
+            draw(VX % (width_), (VY + i) % height_, ram_[I_ + i]) ||
+            did_pixel_turn_off;
       }
-
-      display_->blit();
 
       if (did_pixel_turn_off) {
         VF_ = 0x01;
@@ -187,7 +210,7 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
     } break;
     case 0xE: {
       // Skip if key input
-      bool is_key_pressed = display_->get_key_state(VX);
+      bool is_key_pressed = get_key_state(VX);
       if ((NN == 0x9E && is_key_pressed) || (NN == 0xA1 && !is_key_pressed)) {
         PC_ += 1;
       }
@@ -212,7 +235,7 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
         } break;
         case 0x0A: {
           // TODO: handle get input
-          std::optional<int> key = display_->get_key();
+          std::optional<int> key = get_key();
           if (!key.has_value()) {
             PC_ -= 2;
           }
@@ -239,6 +262,70 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
     default:
       break;
   };
+}
+
+void Emulator::clear() {
+  for (auto& pixel : pixels_) {
+    pixel = 0;
+  }
+}
+
+void Emulator::draw_util(const int x, const int y, sf::Color color) {
+  const int x_actual = x * scale_;
+  const int y_actual = y * scale_;
+
+  sf::RectangleShape rectangle(sf::Vector2f(scale_, scale_));
+  rectangle.setFillColor(color);
+  rectangle.setPosition(x_actual, y_actual);
+
+  window_->draw(rectangle);
+}
+
+void Emulator::draw_pixels() {
+  int index = 0;
+  for (const auto& pixel : pixels_) {
+    sf::Color color = pixel == 0 ? sf::Color::White : sf::Color(150, 50, 250);
+
+    int x = index % width_;
+    int y = index / width_;
+
+    draw_util(x, y, color);
+
+    ++index;
+  }
+}
+
+bool Emulator::draw(const int x, const int y, unsigned short int sprite) {
+  int index = x + (y * width_);
+
+  bool did_pixel_turn_off = false;
+  int count = 0;
+  while ((sprite & 0x00FF)) {
+    const int pixel = sprite & 0x0080;
+    sprite = sprite << 0x1;
+
+    if (pixel) {
+      if (!pixels_[index]) {
+        pixels_[index] = 1;
+      } else {
+        pixels_[index] = 0;
+        did_pixel_turn_off = true;
+      }
+    }
+
+    count++;
+    index++;
+  }
+
+  return did_pixel_turn_off;
+}
+
+bool Emulator::get_key_state(const int key) {
+  return false;
+}
+
+std::optional<int> Emulator::get_key() {
+  return std::nullopt;
 }
 
 // Function returns a random number between 0 and NN inclusive
@@ -346,7 +433,7 @@ void Emulator::handleShift(const INSTR X, const INSTR N) {
   const bool shifted_bit =
       (N == 0x6)
           ? (X & 0x01) == 1    /* check if first bit is set */
-          : (X & 0x80) == 0x80 /* check if ;ast bit is set, 10000000 -> 1*0
+          : (X & 0x80) == 0x80 /* check if last bit is set, 10000000 -> 1*0
                                 + 2*0 + 4*0 + 8*1 => 80 */
       ;
 

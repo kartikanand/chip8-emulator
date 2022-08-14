@@ -4,7 +4,7 @@
 #include <stack>
 #include <string>
 
-#include "display.h"
+#include <SFML/Graphics.hpp>
 
 using INSTR = unsigned short int;
 
@@ -24,15 +24,21 @@ class Emulator {
   void loop();
 
  private:
-  // Init function
-  void init();
+  // Reset function
+  void reset();
 
   // Control Unit
   INSTR fetch();
   void decode_and_execute(const INSTR current_instruction);
 
-  // Audio
+  // Audio, Video, Input
   void beep();
+  void clear();
+  void draw_util(const int x, const int y, sf::Color color);
+  void draw_pixels();
+  bool draw(const int x, const int y, unsigned short int sprite);
+  bool get_key_state(const int key);
+  std::optional<int> get_key();
 
   // Arithmetic functions
   void handleArithmetic(const INSTR X,
@@ -50,7 +56,7 @@ class Emulator {
   void handleMemoryLoad(const INSTR X);
   void handleMemoryStore(const INSTR X);
 
-  std::unique_ptr<Display> display_;
+  std::unique_ptr<sf::RenderWindow> window_;
 
   INSTR ram_[4096];
   std::stack<unsigned short int> stack_;
@@ -62,6 +68,10 @@ class Emulator {
   unsigned char VF_;
 
   const unsigned short int program_start_address_ = 0x200;
+  const int width_ = 64;
+  const int height_ = 32;
+  const int scale_ = 20;
+  std::vector<int> pixels_;
 };
 
 #endif

@@ -31,6 +31,8 @@ class Display {
   const int width_;
   const int height_;
 
+  SDL_Window* window_;
+  SDL_Renderer* renderer_;
   std::vector<int> pixels_;
 };
 

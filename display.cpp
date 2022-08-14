@@ -12,37 +12,55 @@ Display::Display(const int width, const int height)
   for (int i = 0; i < width * height; ++i) {
     pixels_.push_back(0);
   }
+
+  window_ =
+      SDL_CreateWindow("Practice making sdl Window", SDL_WINDOWPOS_CENTERED,
+                       SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_SHOWN);
+
+  if (window_ == nullptr) {
+    std::cout << "Error initializing SDL window" << std::endl;
+  }
+
+  renderer_ = SDL_CreateRenderer(
+      window_, 0, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+
+  clear();
+  blit();
 }
 
 void Display::blit() {
-  static int blit_count = 0;
+  // static int blit_count = 0;
 
-  std::string filename("bliting" + std::to_string(blit_count) + ".txt");
-  std::ofstream myfile;
-  myfile.open(filename);
+  // std::string filename("bliting" + std::to_string(blit_count) + ".txt");
+  // std::ofstream myfile;
+  // myfile.open(filename);
 
-  int count = 0;
-  for (const auto& pixel : pixels_) {
-    if (pixel == 0) {
-      myfile << " ";
-    } else {
-      myfile << "*";
-    }
-    count++;
+  // int count = 0;
+  // for (const auto& pixel : pixels_) {
+  //   if (pixel == 0) {
+  //     myfile << " ";
+  //   } else {
+  //     myfile << "*";
+  //   }
+  //   count++;
 
-    if (count % width_ == 0) {
-      myfile << "\n";
-    }
-  }
+  //   if (count % width_ == 0) {
+  //     myfile << "\n";
+  //   }
+  // }
 
-  myfile.close();
-  blit_count++;
+  // myfile.close();
+  // blit_count++;
+  SDL_RenderPresent(renderer_);
+  SDL_Delay(3000);
 }
 
 void Display::clear() {
   for (auto& pixel : pixels_) {
     pixel = 0;
   }
+
+  SDL_RenderClear(renderer_);
 }
 
 bool Display::draw(const int x, const int y, unsigned short int sprite) {
@@ -56,9 +74,15 @@ bool Display::draw(const int x, const int y, unsigned short int sprite) {
     if (pixel) {
       if (!pixels_[index]) {
         pixels_[index] = 1;
+
+        SDL_SetRenderDrawColor(renderer_, 0xFF, 0xFF, 0xFF, 0xFF);
+        SDL_RenderDrawPoint(renderer_, x, y);
       } else {
         pixels_[index] = 0;
         did_pixel_turn_off = true;
+
+        SDL_SetRenderDrawColor(renderer_, 0x00, 0x00, 0x00, 0xFF);
+        SDL_RenderDrawPoint(renderer_, x, y);
       }
     }
 
