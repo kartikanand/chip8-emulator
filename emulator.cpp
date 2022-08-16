@@ -70,6 +70,8 @@ void Emulator::load_program(const std::string& file_name) {
 void Emulator::loop() {
   PC_ = program_start_address_;
 
+  window_->setFramerateLimit(60);
+
   while (window_->isOpen()) {
     sf::Event event;
     while (window_->pollEvent(event)) {
@@ -91,6 +93,14 @@ void Emulator::loop() {
     draw_pixels();
 
     window_->display();
+
+    if (delay_timer_ > 0) {
+      delay_timer_ -= 1;
+    }
+
+    if (sound_timer_ > 0) {
+      sound_timer_ -= 1;
+    }
   }
 }
 
@@ -173,7 +183,7 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
       var_registers_[X] = NN;
       break;
     case 7:
-      handleAdd(X, NN);
+      handleAdd(X, NN, false);
       break;
     case 8:
       handleArithmetic(X, Y, N, NN, NNN);
@@ -212,7 +222,7 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
       // Skip if key input
       bool is_key_pressed = get_key_state(VX);
       if ((NN == 0x9E && is_key_pressed) || (NN == 0xA1 && !is_key_pressed)) {
-        PC_ += 1;
+        PC_ += 2;
       }
     } break;
     case 0xF:
@@ -234,7 +244,7 @@ void Emulator::decode_and_execute(const INSTR current_instruction) {
           }
         } break;
         case 0x0A: {
-          // TODO: handle get input
+          // Handle input
           std::optional<int> key = get_key();
           if (!key.has_value()) {
             PC_ -= 2;
@@ -321,10 +331,64 @@ bool Emulator::draw(const int x, const int y, unsigned short int sprite) {
 }
 
 bool Emulator::get_key_state(const int key) {
-  return false;
+  std::optional<int> pressed_key = get_key();
+  if (!pressed_key.has_value()) {
+    return false;
+  }
+
+  return pressed_key.value() == key;
 }
 
 std::optional<int> Emulator::get_key() {
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
+    return 0xA;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::B)) {
+    return 0xB;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::C)) {
+    return 0xC;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
+    return 0xD;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::E)) {
+    return 0xE;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::F)) {
+    return 0xF;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num0)) {
+    return 0x0;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num1)) {
+    return 0x1;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num2)) {
+    return 0x2;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num3)) {
+    return 0x3;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num4)) {
+    return 0x4;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num5)) {
+    return 0x5;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num6)) {
+    return 0x6;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num7)) {
+    return 0x7;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num8)) {
+    return 0x8;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Num9)) {
+    return 0x9;
+  }
+
   return std::nullopt;
 }
 
@@ -341,12 +405,12 @@ void Emulator::handleRandom(const INSTR X, const INSTR NN) {
 
 void Emulator::handleBCD(const INSTR VX) {
   INSTR temp = VX;
-  int offset = 0;
+  int offset = 2;
   while (temp) {
     INSTR digit = temp % 10;
     temp = temp / 10;
 
-    ram_[I_ + (offset++)] = digit;
+    ram_[I_ + (offset--)] = digit;
   }
 }
 
@@ -381,7 +445,7 @@ void Emulator::handleArithmetic(const INSTR X,
       var_registers_[X] ^= var_registers_[Y];
       break;
     case 4:
-      handleAdd(X, var_registers_[Y]);
+      handleAdd(X, var_registers_[Y], true);
       break;
     case 5:
     case 7:
@@ -397,12 +461,12 @@ void Emulator::handleArithmetic(const INSTR X,
   }
 }
 
-void Emulator::handleAdd(const INSTR X, const INSTR NN) {
-  const int a_sum = (var_registers_[X] + NN);
+void Emulator::handleAdd(const INSTR X, const INSTR NN, bool change_carry) {
+  const int a_sum = ((int)var_registers_[X] + (int)NN);
 
   const bool is_carry = a_sum > 255;
-  var_registers_[X] = (a_sum) % 255;
-  if (is_carry) {
+  var_registers_[X] = a_sum & 0xFF;
+  if (change_carry && is_carry) {
     VF_ = 1;
   }
 }
@@ -412,7 +476,7 @@ void Emulator::handleSubtract(const INSTR X, const INSTR Y, const INSTR N) {
 
   const INSTR NN = 255 - (N == 0x5 ? var_registers_[Y] : var_registers_[X]);
   const INSTR a_sum = var_registers_[X] + NN;
-  const INSTR a_sub = (a_sum) % 255;
+  const INSTR a_sub = a_sum & 0xFF;
 
   // borrow happens when there is no carry
   // 4 - 3 (no borrow leads to a carry)
@@ -429,13 +493,15 @@ void Emulator::handleSubtract(const INSTR X, const INSTR Y, const INSTR N) {
 }
 
 void Emulator::handleShift(const INSTR X, const INSTR N) {
-  const INSTR shift = (N == 0x6) ? X >> 1 : X << 1;
+  const INSTR VX = var_registers_[X];
+  const INSTR shift = (N == 0x6) ? VX >> 1 : VX << 1;
   const bool shifted_bit =
       (N == 0x6)
-          ? (X & 0x01) == 1    /* check if first bit is set */
-          : (X & 0x80) == 0x80 /* check if last bit is set, 10000000 -> 1*0
+          ? (VX & 0x01) == 1    /* check if first bit is set */
+          : (VX & 0x80) == 0x80 /* check if last bit is set, 10000000 -> 1*0
                                 + 2*0 + 4*0 + 8*1 => 80 */
       ;
 
   VF_ = shifted_bit ? 1 : 0;
+  var_registers_[X] = shift & 0xFF;
 }

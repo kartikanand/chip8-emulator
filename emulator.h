@@ -46,7 +46,7 @@ class Emulator {
                         const INSTR N,
                         const INSTR NN,
                         const INSTR NNN);
-  void handleAdd(const INSTR X, const INSTR NN);
+  void handleAdd(const INSTR X, const INSTR NN, bool change_carry);
   void handleSubtract(const INSTR X, const INSTR Y, const INSTR N);
   void handleShift(const INSTR X, const INSTR NN);
 
