@@ -472,24 +472,13 @@ void Emulator::handleAdd(const INSTR X, const INSTR NN, bool change_carry) {
 }
 
 void Emulator::handleSubtract(const INSTR X, const INSTR Y, const INSTR N) {
-  VF_ = 1;
+  const int opr1 = N == 0x5 ? var_registers_[X] : var_registers_[Y];
+  const int opr2 = N == 0x7 ? var_registers_[X] : var_registers_[Y];
 
-  const INSTR NN = 255 - (N == 0x5 ? var_registers_[Y] : var_registers_[X]);
-  const INSTR a_sum = var_registers_[X] + NN;
-  const INSTR a_sub = a_sum & 0xFF;
+  const int a_sub = opr1 - opr2;
+  var_registers_[X] = a_sub & 0xFF;
 
-  // borrow happens when there is no carry
-  // 4 - 3 (no borrow leads to a carry)
-  // 4 + (255 - 3) => (256)%255 = 1
-  //
-  // 3 - 4 (borrow doesn't lead to a carry)
-  // 3 + (255 - 4) => (254)%255 = 254
-  const bool is_borrow = a_sub <= 255;
-  if (is_borrow) {
-    VF_ = 0;
-  }
-
-  var_registers_[X] = a_sub;
+  VF_ = opr1 > opr2 ? 1 : 0;
 }
 
 void Emulator::handleShift(const INSTR X, const INSTR N) {
